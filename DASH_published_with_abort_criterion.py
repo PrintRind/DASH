@@ -64,7 +64,7 @@ def create_scat(N, P2V, sigma) :
     
     
     figure()
-    imshow(ifftshift(np.angle(scat)), cmap = "hsv"); 
+    imshow(ifftshift(np.angle(scat)), cmap = "hsv", vmin=-pi, vmax=pi); 
     colorbar(); 
     title("scatterer")
     show()
