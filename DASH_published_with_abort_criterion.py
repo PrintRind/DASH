@@ -102,7 +102,7 @@ padding = True  #padding in Fourier plane to increase resolution in target plane
 P2V = 2*pi  #peak to valley phase of scatterer
 sigma_scat = .1    #gaussian blur kernel sigma of scatterer
 scat = create_scat(N, P2V, sigma_scat) #calculate scatterer
-M = create_modes(N) #calculating stack of plane-wave modes
+M = create_modes(N) #calculating stack of plane-    wave modes
 
 
 #%% DASH user parameters
@@ -119,6 +119,15 @@ r0 = 1 #initial weight of the first mode
 sample = make_sample(sample_type) #define fluorescent sample: 2D plane or "bead"
 w = np.zeros((N_i, N_modes), dtype=complex) #init. mode weights
 theta = np.arange(N_p) * 2 * pi / N_p #define phase-stepping angles
+
+# (Optional) Setting Abortion Criterion variables (Optional)
+SlopeDetection = True
+# SlopeDetection = False
+N_test_modes = 24  # number of examined signals
+slope_percentage = 0.1  # abortion criterion
+latest_sig = np.zeros(N_test_modes)  # abortion criterion
+End_iter_detector = np.zeros([N_i])  # record when the abortion is activated
+break_idx = -1 # counting idx for the abortion
 
 m0 = 1 #start with measuring the second mode in the first DASH iteration (the weight of the first mode is directly calculated from an initial measurement)
 
@@ -175,8 +184,18 @@ for i in range(N_i):
         
         I2ph_stack[mm] = TPEF[0]
         PSF_stack[mm, :, :] = fftshift(PSF)
+    
+        #E) (Optional) Current Iteration Abortion Criterion 
+        if SlopeDetection == True and m >= N_test_modes:
+            latest_sig = I2ph_stack[(mm - N_test_modes+1):(mm+1)]  # lastest series of signals
+            slope = (latest_sig[-1] - latest_sig[0]) / N_test_modes  # measure the slope
+            if m == N_test_modes:  # measure the first slope
+                slope0 = slope
+            elif m > N_test_modes and slope < slope_percentage * slope0:  # compare current slope with the first slope
+                break_idx += 1
+                End_iter_detector[break_idx] = mm
+                break
         mm += 1
-
     C_i[i] = C
 
 
