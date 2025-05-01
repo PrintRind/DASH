@@ -35,7 +35,7 @@ def make_sample(type):
         sample = np.ones((N,N))
     return sample
 
-def measure(scat, sample, E, padding = True):
+def measure(scat, sample, E, padding = True, NL=2):
     """testing the correctin pattern C, i.e. measuring the 2-photon signal when it is applied to the SLM"""
        
     if E.ndim == 2:
@@ -49,9 +49,9 @@ def measure(scat, sample, E, padding = True):
         tmp = scat * E
     
     PSF = np.abs((fft2((tmp))) / N / N)**2  #intensity PSF in the focal plane
-    TPEF = eta * np.sum(sample * PSF**2, axis = (1,2)) ##2-photon signal
+    signal = eta * np.sum(sample * PSF**NL, axis = (1,2)) ##2-photon signal
     
-    return TPEF, PSF
+    return signal, PSF
 
 def create_scat(N, P2V, sigma) :
     """creating a random phase scatterer, defined by peak-to-valley P2V and sigma"""
@@ -108,11 +108,13 @@ M = create_modes(N) #calculating stack of plane-wave modes
 #%% DASH user parameters
 
 sample_type = "plane" # "bead" or "plane
-method = "c-DASH" # "DASH" or "c-DASH"
+method = "DASH" # "DASH" or "c-DASH"
 
 N_i = 3  #number of iterations
 N_p = 3 # number of phase steps
-eta = 1e3 #2-photon efficieny
+
+NL = 2 # non-linearity order (2 for two-photon fluorescence, 3 for three-photon fluorescence)
+eta = 1e3 #signal generation efficieny
 f = 0.2 #energy fraction of the testmodes
 r0 = 1 #initial weight of the first mode
 
@@ -127,11 +129,11 @@ if padding:
 else: 
     N_pad = N
 
-w0 = r0*(measure(scat, sample, np.ones((N,N)), padding)[0]).item()**(1/4) #initial weight for 1st mode
+w0 = r0*(measure(scat, sample, np.ones((N,N)), padding, NL)[0]).item()**(1/(2*NL)) #initial weight for 1st mode
 w[0,0] = w0
 
 C_i = np.zeros((N_i, N, N), dtype=complex) #init. stack containing the correction patterns after each iteration
-I2ph_stack = np.zeros(N_i * (N**2) - m0) #init. stack of all TPEF signals
+Imph_stack = np.zeros(N_i * (N**2) - m0) #init. stack of all TPEF signals
 PSF_stack = np.zeros((N_i * (N**2) - m0, 1*N_pad, 1*N_pad)) #init. stack of all internsity PSFs
 C = w0 * np.ones((N, N), dtype=complex)   #choice of initial correction pattern
 
@@ -152,9 +154,9 @@ for i in range(N_i):
         elif method == "c-DASH":
             E_SLM = np.sqrt(f) * M[m][None, :, :] * np.exp(1j * theta[:, None, None]) + np.sqrt(1 - f) * normalize(C)[0] 
         
-        I2ph = measure(scat, sample, E_SLM, padding)[0] #measuring TPEF signal for all phase steps -> vector I2ph
-        S_avg = np.mean(np.sqrt(I2ph)) #average sqrt of 2-photon signal
-        a  = np.sum(np.sqrt(I2ph) * np.exp(1j * theta)) / len(theta)   
+        Imph = measure(scat, sample, E_SLM, padding, NL)[0] #measuring TPEF signal for all phase steps -> vector I2ph
+        S_avg = np.mean(Imph**(1/NL)) #average signal^(1/NL) over all phase steps
+        a  = np.sum(Imph**(1/NL) * np.exp(1j * theta)) / len(theta)   
           
         #B) calculating the mode weight
         w_m = np.sqrt(1/2/f * (S_avg - np.sqrt(S_avg**2 - 4*np.abs(a)**2))).item() #calculating optimal amplitude of mode
@@ -168,17 +170,16 @@ for i in range(N_i):
         
         #D) testing the correction pattern 
         if method == "DASH":
-            TPEF, PSF = measure(scat, sample, np.exp(1j*np.angle(C)), padding) #testing the correction pattern C
+            Imph, PSF = measure(scat, sample, np.exp(1j*np.angle(C)), padding, NL) #testing the correction pattern C
             
         elif method == "c-DASH":
-            TPEF, PSF = measure(scat, sample, normalize(C)[0], padding) #testing the correction pattern C
+            Imph, PSF = measure(scat, sample, normalize(C)[0], padding, NL) #testing the correction pattern C
         
-        I2ph_stack[mm] = TPEF[0]
+        Imph_stack[mm] = Imph[0]
         PSF_stack[mm, :, :] = fftshift(PSF)
         mm += 1
 
     C_i[i] = C
-
 
 
 #------showing results------
@@ -210,20 +211,18 @@ if method == "c-DASH":
     title('abs(C)')
     axis('image')
 
-
-
-I2ph_max = measure(1, sample, np.ones((N,N)), padding)[0].item()  #eval. max. signal for the aberration-free case
+Imph_max = measure(1, sample, np.ones((N,N)), padding, NL)[0].item()  #eval. max. signal for the aberration-free case
 
 figure()
-plot(I2ph_stack)
-ylim(0, I2ph_max*1.1)
+plot(Imph_stack)
+ylim(0, Imph_max*1.1)
 xlim(0, N_i * (N**2) - 1)
 xlabel('Mode measurement no.')
-ylabel('2 photon signal / photons')
+ylabel('Multi-photon signal / photons')
 axvline(x=N_modes-1, color='r', linestyle='--')
 axvline(x=2*N_modes-1, color='r', linestyle='--')
-axhline(y = I2ph_max, color='g', linestyle='--')
-title(method + ", " + str(N_modes) + " modes , sample = " + sample_type)
+axhline(y = Imph_max, color='g', linestyle='--')
+title(method + ", " + str(N_modes) + " modes , sample = " + sample_type + ", NL =" + str(NL))
 show()
 
 
