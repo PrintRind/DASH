@@ -233,17 +233,24 @@ if method == "c-DASH":
 
 I2ph_max = measure(1, sample, np.ones((N,N)), padding)[0].item()  #eval. max. signal for the aberration-free case
 
+
 figure()
-plot(I2ph_stack)
-ylim(0, I2ph_max*1.1)
-xlim(0, N_i * (N**2) - 1)
-xlabel('Mode measurement no.')
-ylabel('2 photon signal / photons')
-axvline(x=N_modes-1, color='r', linestyle='--')
-axvline(x=2*N_modes-1, color='r', linestyle='--')
-axhline(y = I2ph_max, color='g', linestyle='--')
-title(method + ", " + str(N_modes) + " modes , sample = " + sample_type)
+if SlopeDetection == True:  # If Abortion Criterion is used
+    plot(I2ph_stack[:mm])
+    ylim(0, I2ph_max*1.1)
+    for i in range(break_idx+1):    # Draw end of iterations
+        axvline(x=End_iter_detector[i], color='r', linestyle='--', linewidth=1)
+    axhline(y = I2ph_max, color='g', linestyle='--')
+    title(f"Abort Criterion is applied. \n Number of measurements when each iteration ends: \n {End_iter_detector}")
+else:
+    plot(I2ph_stack)
+    ylim(0, I2ph_max*1.1)
+    xlim(0, N_i * (N**2) - 1)
+    xlabel('Mode measurement no.')
+    ylabel('2 photon signal / photons')
+    axvline(x=N_modes-1, color='r', linestyle='--')
+    axvline(x=2*N_modes-1, color='r', linestyle='--')
+    axhline(y = I2ph_max, color='g', linestyle='--')
+    title(method + ", " + str(N_modes) + " modes , sample = " + sample_type)
 show()
-
-
 # %%
